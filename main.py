@@ -3,6 +3,8 @@ import traceback
 from io import StringIO
 from typing import List
 import os
+import json
+import asyncio
 
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
@@ -11,7 +13,6 @@ import httpx
 
 app = FastAPI()
 
-# CORS — let anyone access this
 app.add_middleware(
     CORSMiddleware,
     allow_origins=["*"],
@@ -51,10 +52,13 @@ CODE:
 TRACEBACK:
 {tb}"""
 
-    async with httpx.AsyncClient() as client:
+    async with httpx.AsyncClient(timeout=30.0) as client:
         response = await client.post(
             "https://aipipe.org/openrouter/v1/chat/completions",
-            headers={"Authorization": f"Bearer {token}", "Content-Type": "application/json"},
+            headers={
+                "Authorization": f"Bearer {token}",
+                "Content-Type": "application/json"
+            },
             json={
                 "model": "google/gemini-2.0-flash-lite-001",
                 "messages": [{"role": "user", "content": prompt}],
@@ -62,9 +66,12 @@ TRACEBACK:
             }
         )
     data = response.json()
-    import json
     result = json.loads(data["choices"][0]["message"]["content"])
     return result.get("error_lines", [])
+
+@app.get("/")
+async def root():
+    return {"status": "running"}
 
 @app.post("/code-interpreter", response_model=CodeResponse)
 async def code_interpreter(request: CodeRequest):
